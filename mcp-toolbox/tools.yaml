@@ -1,0 +1,226 @@
+sources:
+  alloydb-study-planner:
+    kind: alloydb-postgres
+    project: genaihackathon-492307
+    region: us-central1
+    cluster: study-planner-cluster
+    instance: study-planner-instance
+    database: postgres
+    user: postgres
+    password: studyplanner123
+
+tools:
+  get_all_subjects:
+    kind: postgres-sql
+    source: alloydb-study-planner
+    description: Get all subjects with their exam dates and progress
+    statement: |
+      SELECT
+        subject_id::text,
+        name,
+        exam_date::text,
+        total_topics,
+        completed_topics,
+        priority,
+        status
+      FROM subjects
+      ORDER BY exam_date ASC
+
+  get_topics_by_subject:
+    kind: postgres-sql
+    source: alloydb-study-planner
+    description: Get all topics for a specific subject by name
+    parameters:
+      - name: subject_name
+        type: string
+        description: Name of the subject
+    statement: |
+      SELECT
+        t.topic_id::text,
+        t.name,
+        t.status,
+        t.difficulty,
+        t.estimated_hours,
+        t.actual_hours,
+        t.notes
+      FROM topics t
+      JOIN subjects s ON t.subject_id = s.subject_id
+      WHERE LOWER(s.name) = LOWER($1)
+      ORDER BY t.difficulty DESC
+
+  get_study_progress:
+    kind: postgres-sql
+    source: alloydb-study-planner
+    description: Get overall study progress across all subjects
+    statement: |
+      SELECT
+        s.name as subject,
+        s.exam_date::text,
+        s.priority,
+        s.total_topics,
+        s.completed_topics,
+        CASE
+          WHEN s.total_topics > 0
+          THEN ROUND((s.completed_topics::numeric / s.total_topics) * 100, 1)
+          ELSE 0
+        END as completion_percentage,
+        COALESCE(SUM(ss.actual_hours), 0) as total_hours_studied,
+        COALESCE(ROUND(AVG(ss.productivity_score)::numeric, 1), 0) as avg_productivity
+      FROM subjects s
+      LEFT JOIN study_sessions ss ON s.subject_id = ss.subject_id
+      GROUP BY s.subject_id, s.name, s.exam_date, s.priority,
+               s.total_topics, s.completed_topics
+      ORDER BY s.exam_date ASC
+
+  get_all_tasks:
+    kind: postgres-sql
+    source: alloydb-study-planner
+    description: Get all pending tasks ordered by due date
+    statement: |
+      SELECT
+        t.task_id::text,
+        t.title,
+        t.description,
+        t.due_date::text,
+        t.priority,
+        t.status,
+        s.name as subject_name
+      FROM tasks t
+      LEFT JOIN subjects s ON t.subject_id = s.subject_id
+      WHERE t.status = 'pending'
+      ORDER BY t.due_date ASC
+
+  add_subject:
+    kind: postgres-sql
+    source: alloydb-study-planner
+    description: Add a new subject with exam date and priority
+    parameters:
+      - name: name
+        type: string
+        description: Name of the subject
+      - name: exam_date
+        type: string
+        description: Exam date in YYYY-MM-DD format
+      - name: priority
+        type: string
+        description: Priority - high, medium, or low
+    statement: |
+      INSERT INTO subjects (name, exam_date, priority)
+      VALUES ($1, $2::date, $3)
+      RETURNING subject_id::text, name, exam_date::text, priority
+
+  add_topic:
+    kind: postgres-sql
+    source: alloydb-study-planner
+    description: Add a new topic to a subject
+    parameters:
+      - name: subject_name
+        type: string
+        description: Name of the subject
+      - name: topic_name
+        type: string
+        description: Name of the topic
+      - name: difficulty
+        type: string
+        description: Difficulty - easy, medium, or hard
+      - name: estimated_hours
+        type: string
+        description: Estimated hours to complete
+    statement: |
+      INSERT INTO topics (subject_id, name, difficulty, estimated_hours)
+      VALUES (
+        (SELECT subject_id FROM subjects WHERE LOWER(name) = LOWER($1)),
+        $2, $3, $4::float
+      )
+      RETURNING topic_id::text, name, difficulty, estimated_hours
+
+  update_topic_status:
+    kind: postgres-sql
+    source: alloydb-study-planner
+    description: Update the completion status of a topic
+    parameters:
+      - name: topic_name
+        type: string
+        description: Name of the topic
+      - name: subject_name
+        type: string
+        description: Name of the subject
+      - name: status
+        type: string
+        description: New status - pending, in_progress, or completed
+    statement: |
+      UPDATE topics
+      SET status = $3
+      WHERE LOWER(name) = LOWER($1)
+      AND subject_id = (
+        SELECT subject_id FROM subjects
+        WHERE LOWER(name) = LOWER($2)
+      )
+      RETURNING topic_id::text, name, status
+
+  add_task:
+    kind: postgres-sql
+    source: alloydb-study-planner
+    description: Add a new study task with due date and priority
+    parameters:
+      - name: title
+        type: string
+        description: Title of the task
+      - name: subject_name
+        type: string
+        description: Subject this task belongs to
+      - name: due_date
+        type: string
+        description: Due date in YYYY-MM-DD format
+      - name: priority
+        type: string
+        description: Priority - high, medium, or low
+    statement: |
+      INSERT INTO tasks (subject_id, title, due_date, priority)
+      VALUES (
+        (SELECT subject_id FROM subjects WHERE LOWER(name) = LOWER($2)),
+        $1, $3::date, $4
+      )
+      RETURNING task_id::text, title, due_date::text, priority
+
+  log_study_session:
+    kind: postgres-sql
+    source: alloydb-study-planner
+    description: Log a completed study session
+    parameters:
+      - name: subject_name
+        type: string
+        description: Name of the subject studied
+      - name: topic_name
+        type: string
+        description: Name of the topic studied
+      - name: date
+        type: string
+        description: Date in YYYY-MM-DD format
+      - name: actual_hours
+        type: string
+        description: Hours actually studied
+      - name: productivity_score
+        type: string
+        description: Productivity score from 1 to 10
+    statement: |
+      INSERT INTO study_sessions
+        (subject_id, topic_id, date, planned_hours, actual_hours, productivity_score)
+      VALUES (
+        (SELECT subject_id FROM subjects WHERE LOWER(name) = LOWER($1)),
+        (SELECT topic_id FROM topics WHERE LOWER(name) = LOWER($2) LIMIT 1),
+        $3::date, $4::float, $4::float, $5::int
+      )
+      RETURNING session_id::text, date::text, actual_hours, productivity_score
+
+toolsets:
+  study_planner_toolset:
+    - get_all_subjects
+    - get_topics_by_subject
+    - get_study_progress
+    - get_all_tasks
+    - add_subject
+    - add_topic
+    - update_topic_status
+    - add_task
+    - log_study_session

@@ -1,0 +1,15 @@
+.venv
+__pycache__
+.adk
+*.pyc
+*.pyo
+.git
+.gitignore
+requirements_full.txt
+requirements_venv.txt
+build_log.txt
+README-cloudshell.txt
+payload.json
+zoo_guide_agent/
+Dockerfile.cloudrun
+main.py

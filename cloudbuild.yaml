@@ -1,0 +1,8 @@
+steps:
+- name: python:3.11-slim
+  entrypoint: bash
+  args:
+    - -c
+    - |
+      pip install google-adk==1.28.1 pg8000 sqlalchemy python-dotenv && \
+      python -c "import sys; sys.path.insert(0, '/workspace'); from study_planner_agent.agent import root_agent; print('OK')"

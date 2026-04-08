@@ -1,0 +1,11 @@
+{
+  "app_name": "study_planner_agent",
+  "user_id": "student1",
+  "session_id": "test-session-1",
+  "new_message": {
+    "role": "user",
+    "parts": [
+      {"text": "Show me all my subjects"}
+    ]
+  }
+}
