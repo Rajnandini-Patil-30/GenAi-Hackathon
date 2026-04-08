@@ -13,11 +13,12 @@ gmail_toolset = MCPToolset(
             "/usr/local/nvm/versions/node/v24.14.1/lib/node_modules/@gongrzhe/server-gmail-autoauth-mcp/dist/index.js"
         ],
         env={
-            **os.environ,
-            "NODE_ENV": "production",
-            "DEBUG": "",
-            "LOG_LEVEL": "error",
-        }
+    **os.environ,
+    "NODE_ENV": "production",
+    "DEBUG": "",
+    "LOG_LEVEL": "error",
+    "HOME": os.path.expanduser("~"),
+}
     )
 )
 

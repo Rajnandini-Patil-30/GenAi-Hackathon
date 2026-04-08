@@ -12,7 +12,10 @@ calendar_toolset = MCPToolset(
         args=["-y", "@cocal/google-calendar-mcp"],
         env={
             **os.environ,
-            "GOOGLE_OAUTH_CREDENTIALS": os.path.expanduser("~/study_planner/calendar_credentials.json"),
+            "GOOGLE_OAUTH_CREDENTIALS": os.path.expanduser("~/.mcp-secrets/calendar/calendar_credentials.json"),
+            "NODE_ENV": "production",
+"DEBUG": "",
+"LOG_LEVEL": "error",
         }
     )
 )
